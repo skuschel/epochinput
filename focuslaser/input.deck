@@ -1,0 +1,137 @@
+# Epoch PIC Code input deck
+#
+# Designed to work for epoch1d, 2d and 3d (irrelevant parameters should be ignored in recent versions of Epoch) without any changes.
+# example of injection a focussing laser pulse into the box along x direction with CEP control.
+#
+# tested with epoch v4.3.7
+# created by Mark Yeung and Stephan Kuschel
+
+begin:constant
+
+  # --- GRID PARAMETERS ---
+  xlength = 12 * micron
+  ylength = 10 * micron
+  zlength = 10 * micron
+  cells_per_x = 25 / micron
+  cells_per_y = 25 / micron
+  cells_per_z = 25 / micron
+  grid_x_min = - 6 * micron
+  grid_y_min = - ylength / 2
+  grid_z_min = - zlength / 2
+
+  # --- DRIVING LASER PULSE ---
+  # wavelength
+  las_lambda = 1.0 * micron
+  #las_omega not used for laser, but for calculating the crtical density at particle setup
+  las_omega = 2 * pi * c / las_lambda
+
+  # peak a0 for a linear pulse - for elliptical pulses this will be reduced appropriately
+  las_a0_lpequiv = 10
+
+  # laser polarisation angle (radians)- 0 is polarised in y dimension
+  # rotates anti-clockwise as viewed from the laser source
+  las_polangle = 0
+
+  # laser fwhm transverse spotsize in focus
+  las_fwhm = 2 * micron
+
+  # pulse duration (fwhm)
+  las_fwhmt = 5 * femto
+
+  #at las_focus_time: pulse maximum arrives at coordinate origin. make sure this is late enough for appropriate injection
+  las_focus_time = 60 * femto
+
+  # laser carrier envelope phase - 0 should mean cycle peak is at the envelope peak (still to be checked)
+  las_cep = 0
+
+  #Laser coordinate System: Laser is travelling along z_las, r_las is its transversal direction.
+  #Focus is always at (0,0) in laser coordinate system. In case you want to move the laser focus or change the angle of incidence (in x, y, z coordinate system), apply the appropriate coordinate transformation here.
+  z_las = x
+  r_las = sqrt(y^2 + z^2) 
+
+  # --- DERIVED CONSTANTS --- DO NOT TOUCH ---
+  # only change things here if you know what you are doing!
+
+  # conversion of fwhm to 1/e^2 radii
+  las_widtht = 0.849322 * las_fwhmt
+  las_width = 0.849322 * las_fwhm
+
+  # gaussian beam equations taken from http://en.wikipedia.org/wiki/Gaussian_beam
+  # rayleigh range
+  las_rayleigh = pi * las_width ^ 2 / las_lambda
+  # wave number
+  las_k = 2.0 * pi / las_lambda
+  # radius of curvature at the injection boundary
+  las_rc = z_las * (1 + (las_rayleigh / (z_las + 1e-20)) ^ 2)
+  # Phasefront shift (delay in space) due to non-infinite las_rc
+  las_rc_shift =  r_las ^ 2 / (2 * las_rc + 1e-20)
+  # radius of beam 
+  las_w = las_width * sqrt(1 + (z_las / las_rayleigh)^2 )
+  # gouy phase shift at the injection boundary
+  las_gouy = atan(z_las / las_rayleigh)
+
+  # laser intensity at focus calculated from the defined a0 value
+  las_intensity_focus = las_a0_lpequiv ^ 2 * 1.368167127e6 / las_lambda ^ 2
+
+begin:control
+
+  t_end = 62 * femto 
+
+  nx = xlength * cells_per_x
+  ny = ylength * cells_per_y
+  nz = zlength * cells_per_z
+  x_min = grid_x_min
+  x_max = x_min + xlength
+  y_min = grid_y_min
+  y_max = y_min + ylength
+  z_min = grid_z_min
+  z_max = z_min + zlength
+
+  stdout_frequency = 20
+  print_constants = T
+end:control
+
+begin:laser
+  # LASER 1
+  # laser block for primary laser pulse (more will be added later)
+  boundary = x_min
+  # intensity at the injection boundary
+  intensity_w_cm2 = (las_width / las_w) ^ (ndims-1) * las_intensity_focus
+  lambda = las_lambda
+  # phase profile required to add curved wavefronts in order to focus the beam
+  phase = - las_k * z_las - las_k * las_rc_shift + las_gouy
+  pol_angle = las_polangle
+  #radial * temporal/longitudinal profiles
+  profile = gauss(r_las , 0, las_w) * gauss(time - las_rc_shift / c, las_focus_time + z_las /c, las_widtht)
+end:laser
+
+begin:boundaries
+  bc_x_min = simple_laser
+  bc_x_max = simple_outflow
+  bc_y_min = simple_outflow
+  bc_y_max = simple_outflow
+  bc_z_min = simple_outflow
+  bc_z_max = simple_outflow
+end:boundaries
+
+begin:output_global
+   force_final_to_be_restartable = F
+end:output_global
+
+begin:output
+  disabled = F
+  name = focusFields
+  dump_at_times = 15*femto, 59*femto, 60*femto, 61*femto
+  dump_first = F
+  dump_final = T
+ 
+  # Properties on grid
+  grid = always + single
+  ex = always + single
+  ey = always + single
+  ez = always + single
+  bx = always + single
+  by = always + single
+  bz = always + single
+  poynt_flux = always + single
+end:output
