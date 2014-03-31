@@ -39,7 +39,7 @@ begin:constant
   las_fwhmt = 5 * femto
 
   #at las_focus_time: pulse maximum arrives at coordinate origin. make sure this is late enough for appropriate injection
-  las_focus_time = 60 * femto
+  las_focus_time = 30 * femto
 
   # laser carrier envelope phase - 0 should mean cycle peak is at the envelope peak (still to be checked)
   las_cep = 0
@@ -47,7 +47,7 @@ begin:constant
   #Laser coordinate System: Laser is travelling along z_las, r_las is its transversal direction.
   #Focus is always at (0,0) in laser coordinate system. In case you want to move the laser focus or change the angle of incidence (in x, y, z coordinate system), apply the appropriate coordinate transformation here.
   z_las = x
-  r_las = sqrt(y^2 + z^2) 
+  r_las = sqrt(y^2 + z^2)
 
   # --- DERIVED CONSTANTS --- DO NOT TOUCH ---
   # only change things here if you know what you are doing!
@@ -99,7 +99,9 @@ begin:laser
   intensity_w_cm2 = (las_width / las_w) ^ (ndims-1) * las_intensity_focus
   lambda = las_lambda
   # phase profile required to add curved wavefronts in order to focus the beam
-  phase = - las_k * z_las - las_k * las_rc_shift + las_gouy
+  # Added pi / 2 so there will be a cosinus and not a sinus
+  phase = - las_k * z_las - las_k * las_rc_shift + las_gouy  - 2 * pi * c / las_lambda * las_focus_time + las_cep + pi / 2
+
   pol_angle = las_polangle
   #radial * temporal/longitudinal profiles
   profile = gauss(r_las , 0, las_w) * gauss(time - las_rc_shift / c, las_focus_time + z_las /c, las_widtht)
@@ -121,7 +123,7 @@ end:output_global
 begin:output
   disabled = F
   name = focusFields
-  dump_at_times = 15*femto, 59*femto, 60*femto, 61*femto
+  dump_at_times = 15*femto, 29*femto, 30*femto, 31*femto
   dump_first = F
   dump_final = T
  
