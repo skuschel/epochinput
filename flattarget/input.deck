@@ -68,7 +68,7 @@ begin:constant
   # radius of beam 
   las_w = las_width * sqrt(1 + (z_las / las_rayleigh)^2 )
   # gouy phase shift at the injection boundary
-  las_gouy = if(ndims eq 1,0,atan(z_las / las_rayleigh))
+  las_gouy = atan(z_las / las_rayleigh)
 
   # laser intensity at focus calculated from the defined a0 value
   las_intensity_focus = las_a0_lpequiv ^ 2 * 1.368167127e6 / las_lambda ^ 2
