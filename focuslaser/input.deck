@@ -122,10 +122,14 @@ end:output_global
 
 begin:output
   disabled = F
-  name = focusFields
-  dump_at_times = 15*femto, 29*femto, 30*femto, 31*femto
+  name = fields
+  
+  dump_at_times = 15 * femto, 29 * femto, 30 * femto, 31 * femto
+  # dt_snapshot = 20 * femto
+  # time_start = 10 * femto
+  # time_stop = 50 * femto
   dump_first = F
-  dump_final = T
+  dump_final = F
  
   # Properties on grid
   grid = always + single
@@ -135,5 +139,7 @@ begin:output
   bx = always + single
   by = always + single
   bz = always + single
+
+  # Derived variables
   poynt_flux = always + single
 end:output
