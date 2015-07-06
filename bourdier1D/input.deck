@@ -1,0 +1,261 @@
+# Epoch PIC Code Input Deck for 1D Bourdier method implementation to reduce an oblique incidence case 
+# to a 1D normal incidence interaction.
+#
+# Only use with epoch1d!!
+#
+# Target is a flat glass target with the option of an exponential density ramp.
+#
+# The target is positioned such that the point in the ramp of critical density is placed at (0,0,0)
+# 
+# Give all the input parameters in the lab frame and these are then converted to the Lorentz frame
+# as needed.  Note that the output dumps will be in the boosted frame and so should be transformed
+# back in the analysis (see Bourdier, Phys. Fluids, 26 (1983))
+#
+# Transformations are (MF is moving frame and angle is angle of incidence):
+# lambda_MF = lambda0/cos(angle)
+# n_MF = n0/cos(angle)
+# I_MF = I0*cos(angle)^2
+# tp_MF = tp/cos(angle)
+#
+# Ions must be left as mobile
+#
+# Tested with epoch v4.5.1
+#
+# Mark Yeung, Sergey Rykovanov and Stephan Kuschel (06.07.15)
+
+begin:constant
+
+  # --- GRID PARAMETERS ---
+  xlength = 10 * micron
+  cells_per_x = 1000 / micron
+  grid_x_min = - 7.5 * micron
+
+  # angle of incidence (radians)
+  angle = pi/4
+
+  # --- DRIVING LASER PULSE ---
+  # wavelength
+  las_lambda = 0.8 * micron
+
+  # peak a0
+  las_a0_lpequiv = 10
+
+  # laser polarisation angle (radians)- 0 is polarised in y dimension
+  # rotates anti-clockwise as viewed from the laser source
+  las_polangle = 0
+
+  # pulse duration (fwhm)
+  las_fwhmt = 5 * femto
+
+  #at las_focus_time: pulse maximum arrives at coordinate origin. make sure this is late enough for appropriate injection
+  las_focus_time = 40 * femto
+
+  # laser carrier envelope phase - 0 means sine pulse
+  las_cep = 0
+
+  # --- TARGET ---
+  # dont touch, but necessary for following calculations
+  n_crit = critical(2 * pi * c / las_lambda)
+
+  # density (Fused Silica at full ionisation: 6.6e29 or 380nc at 800nm)
+  n_max = 40 * n_crit
+
+  # rough estimation for number of electrons per cell (if frac=1)
+  npart_per_cell = 5000
+
+  # scale length - make sure the simulation can resolve it
+  n_Lp = 0 * las_lambda / 10
+
+  # Thickness of constant density in target
+  n_thickness = 2.0 * micron 
+
+  # --- DERIVED CONSTANTS --- DO NOT TOUCH ---
+  # only change things here if you know what you are doing!
+
+  # conversion of fwhm to 1/e^2 radii
+  las_widtht = 0.849322 * las_fwhmt
+
+  las_k = 2.0 * pi / las_lambda
+
+  # laser intensity at focus calculated from the defined a0 value
+  las_intensity_focus = las_a0_lpequiv ^ 2 * 1.368167127e6 / las_lambda ^ 2
+
+  # --- TARGET --- position calculation
+  x_c = n_Lp * loge(n_max / (n_crit)) # Distance between n=n_crit und n=n_max 
+
+  # total particle number calculation
+  npart1D = npart_per_cell * (n_thickness + 3 * n_Lp) * cells_per_x
+
+end:constant
+
+begin:control
+  t_end =  52.5 * femto 
+  
+  npart = npart1D
+
+  particle_tstart = 0 * femto
+
+  nx = xlength * cells_per_x
+  x_min = grid_x_min
+  x_max = x_min + xlength
+
+  stdout_frequency = 50
+end:control
+
+begin:laser
+  # LASER 1
+  # Main laser block
+  # Lorentz transformations for boosted frame variables are included here
+  boundary = x_min
+  # intensity at the injection boundary (boosted)
+  intensity_w_cm2 = las_intensity_focus * cos(angle) ^ 2
+  # wavelength (boosted)
+  lambda = las_lambda / cos(angle)
+  # phase
+  phase = las_cep
+  # polarisation direction
+  pol_angle = las_polangle
+  # temporal profiles
+  profile = gauss(time, las_focus_time + x /c, las_widtht / cos(angle))
+end:laser
+
+begin:laser
+  # Correction for vector potential representation
+  # Only matters for very short pulses and cep phase not equal to zero
+  boundary = x_min
+  intensity_w_cm2 = las_intensity_focus * cos(angle) ^ 2
+  lambda = las_lambda / cos(angle)
+  phase = las_cep + pi/2
+  pol_angle = las_polangle
+  profile = 2*(time-(las_focus_time+x/c))*(las_lambda/cos(angle))/2/pi/c/(las_widtht/cos(angle))^2*gauss(time, las_focus_time + x/c,las_widtht / cos(angle))
+end:laser 
+
+begin:boundaries
+  bc_x_min = simple_laser
+  bc_x_max = simple_outflow
+end:boundaries
+
+begin:species
+  # Electron
+  #
+  # Density profile for both ions and electrons defined here and Lorentz transformation
+  # for Bourdier method is also included
+  name = electron
+  charge = -1.0
+  mass = 1.0
+  frac = 1
+  
+  # density is in boosted frame units 
+  density = if ( (x lt (x_c + n_thickness)) and (x gt (x_c)) , n_max / cos(angle), 0.0)
+
+  density_min = 0.05 * n_crit / cos(angle)
+
+  # this adds a transverse constant velocity for the Bourdier mehtod
+  drift_y = c * tan(angle) * me
+end:species
+
+#Fused Silica SiO2 at full ionisation
+
+begin:species
+  name = O8
+  charge = 8
+  mass = 16 * 1836.2
+  frac = 1/5
+
+  density = density(electron) / 30 * 2
+  density_min = (0.05 * n_crit / 30 * 2) / cos(angle)
+
+  drift_y = c * tan(angle) * 16 * 1836.2 * me
+end:species
+
+begin:species
+  name = Si14
+  charge = 14
+  mass = 28 * 1836.2
+  frac = 1/5
+
+  density = density(electron) / 30
+  density_min = (0.05 * n_crit / 30 ) / cos(angle)
+  drift_y = c * tan(angle) * 28 * 1836.2 * me
+end:species
+
+begin:output_global
+   force_final_to_be_restartable = F
+end:output_global
+
+begin:output
+  disabled = T
+  name = particles
+
+  # dump_at_times = 10 * femto, 20 * femto, 30 * femto
+  # dt_snapshot = 20 * femto
+  # time_start = 10 * femto
+  # time_stop = 50 * femto
+  dump_first = F
+  dump_final = F
+ 
+  # Properties at particle positions
+  particles = always + single
+  px = always + single
+  py = always + single 
+  pz = always + single
+  vx = never
+  vy = never
+  vz = never
+  charge = never
+  mass = never
+  particle_weight = always + single
+  ejected_particles = never
+  particle_energy = never
+  relativistic_mass = never
+  gamma = never
+  id = never
+
+  # Properties on grid
+  grid = always + single
+  ex = never
+  ey = never
+  ez = never
+  bx = never
+  by = never
+  bz = never
+  jx = never
+  jy = never
+  jz = never
+
+  # Derived variables
+  ekbar = never
+  ekflux = never
+  mass_density = never
+  charge_density = never
+  number_density = never
+  temperature = never
+  poynt_flux = never
+end:output
+begin:output
+  disabled = F
+  name = fields
+  
+  # dump_at_times = 10 * femto
+  dt_snapshot = 10 * femto
+  # time_start = 10 * femto
+  # time_stop = 50 * femto
+  dump_first = T
+  dump_final = T
+ 
+  # Properties on grid
+  grid = always + single
+  ex = always + single
+  ey = always + single
+  ez = always + single
+  bx = always + single
+  by = always + single
+  bz = always + single
+  jx = never
+  jy = never
+  jz = never
+
+  # Derived variables
+  number_density = always + single + species
+  poynt_flux = never
+end:output
